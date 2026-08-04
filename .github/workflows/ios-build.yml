@@ -22,11 +22,8 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Install CocoaPods dependencies
-        working-directory: ios
-        run: |
-          gem install cocoapods --no-document
-          pod install
+      - name: Precache iOS artifacts
+        run: flutter precache --ios
 
       - name: Install xcodeproj gem
         run: gem install xcodeproj --no-document
