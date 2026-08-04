@@ -7,7 +7,8 @@ on:
 
 jobs:
   build-ios:
-    runs-on: macos-15
+    runs-on: macos-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -15,37 +16,21 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.32.8'
+          flutter-version: '3.27.4'
           channel: stable
           cache: true
 
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Fix Xcode project (add iOS native Swift files)
-        working-directory: ios
-        run: ruby ../Tools/fix-ios-project.rb
+      - name: Install xcodeproj gem
+        run: gem install xcodeproj --no-document
 
-      - name: Add Privacy Manifest for required reasons
-        run: |
-          RUBY_SCRIPT=$(cat << 'RUBY_SCRIPT'
-          require 'xcodeproj'
-          project_path = 'ios/Runner.xcodeproj'
-          project = Xcodeproj::Project.open(project_path)
-          target = project.targets.select { |t| t.name == 'Runner' }.first
-          target.build_configurations.each do |config|
-            config.build_settings['SWIFT_VERSION'] ||= '5.0'
-            config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] ||= '15.0'
-          end
-          project.save
-          RUBY_SCRIPT
-          )
-          gem install xcodeproj --no-document
-          ruby -e "$RUBY_SCRIPT"
+      - name: Fix Xcode project (add iOS native Swift files)
+        run: ruby Tools/fix-ios-project.rb
 
       - name: Build iOS app (unsigned)
-        run: |
-          flutter build ios --release --no-codesign --target-platform=ios-arm64
+        run: flutter build ios --release --no-codesign
 
       - name: Package as unsigned IPA
         run: |
@@ -60,11 +45,3 @@ jobs:
           name: PackingProof-Mobile-iOS
           path: PackingProof-Mobile-iOS.ipa
           retention-days: 30
-
-      - name: Upload build summary
-        if: always()
-        run: |
-          echo "## iOS Build Result" >> $GITHUB_STEP_SUMMARY
-          echo "**Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
