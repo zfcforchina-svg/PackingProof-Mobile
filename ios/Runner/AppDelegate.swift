@@ -2,14 +2,13 @@ import Flutter
 import UIKit
 
 @main
-@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+@objc class AppDelegate: FlutterAppDelegate {
     private var continuousCameraPlugin: ContinuousCameraPlugin?
     private var lanBackupPlugin: LanBackupPlugin?
     private var videoExportPlugin: VideoExportPlugin?
     private var recordingThumbnailPlugin: RecordingThumbnailPlugin?
     private var videoWatermarkPlugin: VideoWatermarkPlugin?
     private var orderInfoReceiverPlugin: OrderInfoReceiverPlugin?
-
     private var maxVolumeChannel: FlutterMethodChannel?
 
     override func application(
@@ -17,82 +16,51 @@ import UIKit
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
         // Configure audio session for recording
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetooth])
-        try? session.setActive(true)
+        let audioSession = AVAudioSession.sharedInstance()
+        try? audioSession.setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetooth])
+        try? audioSession.setActive(true)
 
-        return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-    }
+        GeneratedPluginRegistrant.register(with: self)
 
-    func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
-        GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+        guard let controller = window?.rootViewController as? FlutterViewController else {
+            return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+        }
 
-        let messenger = engineBridge.binaryMessenger
-        let registry = engineBridge.textures
+        let messenger = controller.binaryMessenger
+        let registry = controller.engine?.textures ?? controller.textureRegistry
 
-        // Camera plugin (uses texture registry)
-        continuousCameraPlugin = ContinuousCameraPlugin(
-            registry: registry,
-            messenger: messenger
-        )
-
-        // LAN backup plugin
+        // Register all custom iOS plugins
+        continuousCameraPlugin = ContinuousCameraPlugin(registry: registry, messenger: messenger)
         lanBackupPlugin = LanBackupPlugin(messenger: messenger)
-
-        // Video export plugin
         videoExportPlugin = VideoExportPlugin(messenger: messenger)
-
-        // Thumbnail plugin
         recordingThumbnailPlugin = RecordingThumbnailPlugin(messenger: messenger)
-
-        // Watermark plugin
         videoWatermarkPlugin = VideoWatermarkPlugin(messenger: messenger)
-
-        // Order info receiver plugin
         orderInfoReceiverPlugin = OrderInfoReceiverPlugin(messenger: messenger)
 
-        // Max volume control channel
         maxVolumeChannel = FlutterMethodChannel(
             name: "app.packingproof.mobile/system_volume",
             binaryMessenger: messenger
         )
-        maxVolumeChannel?.setMethodCallHandler { [weak self] call, result in
+        maxVolumeChannel?.setMethodCallHandler { call, result in
             switch call.method {
-            case "beginSession", "boost":
-                // iOS volume control is limited by design; use MPVolumeView if needed
-                result(nil)
-            case "endSession", "disable":
+            case "beginSession", "boost", "endSession", "disable":
                 result(nil)
             default:
                 result(FlutterMethodNotImplemented)
             }
         }
-    }
 
-    override func applicationWillResignActive(_ application: UIApplication) {
-        orderInfoReceiverPlugin?.onHostBackground()
-        super.applicationWillResignActive(application)
-    }
-
-    override func applicationDidBecomeActive(_ application: UIApplication) {
-        orderInfoReceiverPlugin?.onHostForeground()
-        super.applicationDidBecomeActive(application)
+        return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
 
     override func applicationWillTerminate(_ application: UIApplication) {
         continuousCameraPlugin?.disposeCamera()
-        continuousCameraPlugin = nil
         lanBackupPlugin?.dispose()
-        lanBackupPlugin = nil
         videoExportPlugin?.dispose()
-        videoExportPlugin = nil
         recordingThumbnailPlugin?.dispose()
-        recordingThumbnailPlugin = nil
         videoWatermarkPlugin?.dispose()
-        videoWatermarkPlugin = nil
         orderInfoReceiverPlugin?.dispose()
-        orderInfoReceiverPlugin = nil
         maxVolumeChannel?.setMethodCallHandler(nil)
-        maxVolumeChannel = nil
+        super.applicationWillTerminate(application)
     }
 }
