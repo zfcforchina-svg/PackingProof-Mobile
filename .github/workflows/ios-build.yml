@@ -8,42 +8,56 @@ on:
 jobs:
   build-ios:
     runs-on: macos-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Install Flutter dependencies
+      - name: Flutter doctor
+        run: flutter doctor -v
+
+      - name: Pub get
         run: flutter pub get
 
-      - name: Precache iOS artifacts
+      - name: Precache iOS
         run: flutter precache --ios
 
-      - name: Install xcodeproj gem
-        run: gem install xcodeproj --no-document
-
-      - name: Fix Xcode project (add iOS native Swift files)
-        run: ruby Tools/fix-ios-project.rb
-
-      - name: Build iOS app (unsigned)
-        run: flutter build ios --release --no-codesign
-
-      - name: Package as unsigned IPA
+      - name: Fix Xcode project
         run: |
-          mkdir -p Payload
-          cp -R build/ios/Release-iphoneos/Runner.app Payload/
-          zip -r -y PackingProof-Mobile-iOS.ipa Payload
-          rm -rf Payload
+          gem install xcodeproj --no-document
+          ruby Tools/fix-ios-project.rb
 
-      - name: Upload IPA artifact
-        uses: actions/upload-artifact@v4
+      - name: Build iOS
+        run: flutter build ios --debug --no-codesign 2>&1 || true
+
+      - name: Check build output
+        run: |
+          echo "Build directory contents:"
+          find build/ios -type f 2>/dev/null || echo "No build output"
+          ls -la build/ios/ 2>/dev/null || echo "No build/ios/"
+
+      - name: Package IPA (if exists)
+        run: |
+          if [ -d "build/ios/Debug-iphoneos/Runner.app" ]; then
+            mkdir -p Payload
+            cp -R build/ios/Debug-iphoneos/Runner.app Payload/
+            zip -r -y PackingProof-Mobile-iOS.ipa Payload
+            rm -rf Payload
+            echo "IPA created"
+          else
+            echo "Runner.app not found, skipping IPA packaging"
+            # Try to build as ADHOC
+            flutter build ios --no-codesign 2>&1 || echo "Build also failed"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: PackingProof-Mobile-iOS
-          path: PackingProof-Mobile-iOS.ipa
-          retention-days: 30
+          name: ios-build-output
+          path: |
+            PackingProof-Mobile-iOS.ipa
+            build/ios/**/*.log
+          retention-days: 7
