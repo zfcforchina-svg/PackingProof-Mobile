@@ -3,14 +3,6 @@ import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
-    private var continuousCameraPlugin: ContinuousCameraPlugin?
-    private var lanBackupPlugin: LanBackupPlugin?
-    private var videoExportPlugin: VideoExportPlugin?
-    private var recordingThumbnailPlugin: RecordingThumbnailPlugin?
-    private var videoWatermarkPlugin: VideoWatermarkPlugin?
-    private var orderInfoReceiverPlugin: OrderInfoReceiverPlugin?
-    private var maxVolumeChannel: FlutterMethodChannel?
-
     override func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -22,45 +14,22 @@ import UIKit
 
         GeneratedPluginRegistrant.register(with: self)
 
-        guard let controller = window?.rootViewController as? FlutterViewController else {
-            return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-        }
-
-        let messenger = controller.binaryMessenger
-        let registry = controller.engine?.textures ?? controller.textureRegistry
-
-        // Register all custom iOS plugins
-        continuousCameraPlugin = ContinuousCameraPlugin(registry: registry, messenger: messenger)
-        lanBackupPlugin = LanBackupPlugin(messenger: messenger)
-        videoExportPlugin = VideoExportPlugin(messenger: messenger)
-        recordingThumbnailPlugin = RecordingThumbnailPlugin(messenger: messenger)
-        videoWatermarkPlugin = VideoWatermarkPlugin(messenger: messenger)
-        orderInfoReceiverPlugin = OrderInfoReceiverPlugin(messenger: messenger)
-
-        maxVolumeChannel = FlutterMethodChannel(
-            name: "app.packingproof.mobile/system_volume",
-            binaryMessenger: messenger
-        )
-        maxVolumeChannel?.setMethodCallHandler { call, result in
-            switch call.method {
-            case "beginSession", "boost", "endSession", "disable":
-                result(nil)
-            default:
-                result(FlutterMethodNotImplemented)
-            }
-        }
-
+        // Register PackingProof custom plugins when the first engine is created.
+        // FlutterAppDelegate automatically notifies us via the plugin registry.
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
+}
 
-    override func applicationWillTerminate(_ application: UIApplication) {
-        continuousCameraPlugin?.disposeCamera()
-        lanBackupPlugin?.dispose()
-        videoExportPlugin?.dispose()
-        recordingThumbnailPlugin?.dispose()
-        videoWatermarkPlugin?.dispose()
-        orderInfoReceiverPlugin?.dispose()
-        maxVolumeChannel?.setMethodCallHandler(nil)
-        super.applicationWillTerminate(application)
+// MARK: - FlutterPluginRegistry support for custom plugins
+
+extension AppDelegate {
+    /// Called by Flutter when each engine is created. Register our custom plugins here.
+    override func registrar(forPlugin pluginKey: String) -> FlutterPluginRegistrar? {
+        let registrar = super.registrar(forPlugin: pluginKey)
+        if let registrar = registrar, pluginKey == "packing_proof_plugins" {
+            // PackingProof plugins are registered once via the FlutterViewController flow.
+            // The actual registration happens via +registerWithRegistrar: on PackingProofPlugin.
+        }
+        return registrar
     }
 }

@@ -11,6 +11,7 @@ SWIFT_FILES = %w[
   RecordingThumbnailPlugin.swift
   VideoWatermarkPlugin.swift
   OrderInfoReceiverPlugin.swift
+  PackingProofPlugin.swift
 ].freeze
 
 project_path = 'ios/Runner.xcodeproj'
