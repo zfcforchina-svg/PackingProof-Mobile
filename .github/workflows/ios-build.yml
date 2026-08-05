@@ -17,37 +17,57 @@ jobs:
           cache: true
 
       - name: Flutter doctor
-        run: flutter doctor -v
+        run: flutter doctor -v 2>&1 | tee doctor.log
 
       - name: Pub get
-        run: flutter pub get
+        run: flutter pub get 2>&1 | tee pubget.log
 
       - name: Precache iOS
-        run: flutter precache --ios
+        run: flutter precache --ios 2>&1 | tee precache.log
 
       - name: Fix Xcode project
         run: |
-          gem install xcodeproj --no-document
-          ruby Tools/fix-ios-project.rb
+          gem install xcodeproj --no-document 2>&1 | tee gem.log
+          ruby Tools/fix-ios-project.rb 2>&1 | tee fixproject.log
 
-      - name: Build iOS (debug, no codesign)
-        run: flutter build ios --debug --no-codesign
-
-      - name: Package IPA
+      - name: Try building (capture full output)
         run: |
-          APP_PATH="build/ios/Debug-iphoneos/Runner.app"
-          if [ ! -d "$APP_PATH" ]; then
-            APP_PATH="build/ios/iphoneos/Runner.app"
-          fi
-          ls -la "$APP_PATH"
-          mkdir -p Payload
-          cp -R "$APP_PATH" Payload/
-          zip -r -y PackingProof-Mobile-iOS.ipa Payload
-          rm -rf Payload
-          ls -la PackingProof-Mobile-iOS.ipa
+          set +e
+          flutter build ios --debug --no-codesign --verbose 2>&1 | tee build.log
+          BUILD_EXIT=$?
+          echo "Build exit code: $BUILD_EXIT" >> build.log
+          exit 0
+
+      - name: Show key errors from build log
+        run: |
+          echo "=== Compile Errors ==="
+          grep -i "error:" build.log | head -30 || echo "No compile errors found"
+          echo ""
+          echo "=== Failed Steps ==="
+          grep -i "failed\|FAILED\|fatal\|BUILD FAILED" build.log | head -20 || echo "No failures"
+          echo ""
+          echo "=== Last 30 lines ==="
+          tail -30 build.log
+
+      - name: Package IPA if available
+        run: |
+          for path in "build/ios/Debug-iphoneos/Runner.app" "build/ios/iphoneos/Runner.app" "build/ios/Release-iphoneos/Runner.app"; do
+            if [ -d "$path" ]; then
+              echo "Found: $path"
+              mkdir -p Payload
+              cp -R "$path" Payload/
+              zip -r -y PackingProof-Mobile-iOS.ipa Payload
+              rm -rf Payload
+              echo "IPA created"
+              break
+            fi
+          done
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: PackingProof-Mobile-iOS
-          path: PackingProof-Mobile-iOS.ipa
-          retention-days: 30
+          name: build-logs
+          path: |
+            *.log
+            PackingProof-Mobile-iOS.ipa
+          retention-days: 7
